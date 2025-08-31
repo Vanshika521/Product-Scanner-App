@@ -1,37 +1,33 @@
-package com.android_development.productscannerapp
+package com.android_development.productscanner
 
+import android.app.Application
+import androidx.room.Room
+import com.android_development.productscannerapp.ApiClient
+import com.android_development.productscanner.Scan
 
-    // Handles API calls and saving scan history
-class ProductRepository(context: Context) {
+class ProductRepository(app: Application) {
+    private val db = Room.databaseBuilder(app, AppDatabase::class.java, "app_db").build()
+    private val dao = db.scanDao()
 
-        // Simple Room database
-        private val db = Room.databaseBuilder(context, AppDatabase::class.java, "scan_db").build()
+    fun getHistory() = dao.getAll()
+    suspend fun fetchAndSaveProduct(code: String, lat: Double, lng: Double): Scan {
+        // temporary hardcoded phone, or fetch from user prefs
+        val phone = "1234567890"
 
-        // Retrofit for API
-        private val api = Retrofit.Builder()
-            .baseUrl("https://newdemo.onspotsolutions.com/")
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(ApiService::class.java)
-
-        // Fetch product from API
-        fun getProduct(qrCode: String, onResult: (ProductResponse?) -> Unit) {
-            api.verifyQRCode("9320653961", qrCode).enqueue(object: Callback<ProductResponse> {
-                override fun onResponse(call: Call<ProductResponse>, response: Response<ProductResponse>) {
-                    onResult(response.body())
-                }
-                override fun onFailure(call: Call<ProductResponse>, t: Throwable) { onResult(null) }
-            })
-        }
-
-        // Save scan in local database
-        fun saveScan(product: ProductResponse, qrCode: String) {
-            Thread {
-                db.scanDao().insert(
-                    ScanEntity(qrCode = qrCode, productName = product.name ?: "", timestamp = System.currentTimeMillis())
-                )
-            }.start()
-        }
+        val result = ApiClient.api.verifyQRCode(phone, code)
+        val scan = Scan(
+            id = code,
+            name = result.name,
+            description = result.description,
+            imageUrl = result.image
+        )
+        dao.insert(
+            History(
+                qrCode = code,
+                productName = result.name,
+                timestamp = System.currentTimeMillis()
+            )
+        )
+        return scan
     }
-
 }
